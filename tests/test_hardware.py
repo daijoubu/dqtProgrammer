@@ -25,7 +25,7 @@ import canopen
 import time
 import os
 
-from src.auth import calculate_key, AuthenticationError
+from src.auth import AuthenticationError
 
 
 # Skip all hardware tests if no hardware flag is set

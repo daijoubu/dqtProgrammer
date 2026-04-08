@@ -7,13 +7,13 @@
 These requirements define the minimum viable functionality for initial implementation.
 
 ### Authentication
-- [ ] **AUTH-01**: Implement SDO authentication sequence with seed/key exchange (per CiA 301/302)
+- [ ] AUTH-01: Implement SDO authentication sequence with seed/key exchange (per CiA 301/302)
 - [ ] AUTH-02: Validate key matches charger requirements
 
 ### Block Download
-- [ ] BLOCK-01: Implement byte-accurate SDO block transfer protocol
-- [ ] BLOCK-02: Handle sub-block transfers as per Delta-Q specifications
-- [ ] BLOCK-03: Manage CRC calculation and validation during download
+- [x] BLOCK-01: Implement byte-accurate SDO block transfer protocol
+- [x] BLOCK-02: Handle sub-block transfers as per Delta-Q specifications
+- [x] BLOCK-03: Manage CRC calculation and validation during download
 
 ### Firmware Handling
 - [ ] FIRM-01: Load firmware from specified binary file

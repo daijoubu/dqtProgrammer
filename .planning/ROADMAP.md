@@ -59,5 +59,15 @@ D --> E[Phase 4: Testing (Weeks 11-14)]
   </table>
 </details>
 
+### Phase 1: Support Zip files
+
+**Goal:** Add ZIP archive support to firmware loading, enabling extraction of .bin files from ZIP archives
+**Requirements**: FIRM-01, FIRM-02
+**Depends on:** Phase 0 (Project initialization)
+**Plans:** 1 plan
+
+Plans:
+- [x] 01-01-PLAN.md — Add ZIP extraction support to FirmwareLoader
+
 ---
 *Last updated: 2026-04-08 after roadmap creation*

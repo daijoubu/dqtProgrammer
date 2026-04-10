@@ -238,7 +238,8 @@ class TestSDOBlockDownload(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.mock_bus = Mock(spec=['canopen'])
+        self.mock_bus = Mock()
+        self.mock_bus.channel = 'vcan0'
         self.node_id = 0x10
         
         # Create downloader with mocked bus

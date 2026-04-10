@@ -38,10 +38,10 @@ def setup_vcan_loopback(interface: str = CAN_INTERFACE) -> bool:
                 check=True
             )
         
-        # Bring up interface
+        # Bring up interface (ignore error if already up)
         subprocess.run(
             ['ip', 'link', 'set', interface, 'up'],
-            check=True
+            capture_output=True
         )
         
         # Enable loopback mode via can-utils
@@ -105,13 +105,12 @@ def can_network(can_interface):
     Yields the network, then closes it after the test.
     """
     network = canopen.Network()
-    network.add_interface(canopen.SocketCan(can_interface))
-    network.start()
+    network.connect(bustype='socketcan', channel=can_interface)
     
     yield network
     
     try:
-        network.stop()
+        network.disconnect()
     except Exception:
         pass
 

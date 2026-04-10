@@ -36,4 +36,9 @@ See: .planning/PROJECT.md (updated 2026-04-08 after initialization)
 
 ---
 
+## Roadmap Evolution
+- Phase 1 added: Support Zip files
+
+---
+
 *Last updated: 2026-04-08 after executing 02-01-PLAN.md*

@@ -33,8 +33,9 @@ class SDOAuthentication:
         self.timeout = timeout
         
         # Create canopen network and node
-        self.network = canopen.Network(bus)
-        self.node = canopen.RemoteNode(node_id, '')
+        self.network = canopen.Network()
+        self.network.connect(interface='socketcan', channel=bus.channel)
+        self.node = canopen.RemoteNode(node_id, None)
         self.network.add_node(self.node)
         
         # Configure timeout

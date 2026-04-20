@@ -40,7 +40,8 @@ def main():
             timeout=args.timeout,
         )
         print()
-        print(f"Done — {info.file_size} bytes, CRC32=0x{info.crc32:08X}")
+        crc_str = f", DQT CRC=0x{info.dqt_crc:08X}" if info.dqt_crc is not None else ""
+        print(f"Done — {info.file_size} bytes, CRC32=0x{info.crc32:08X}{crc_str}")
     except Exception as e:
         print(f"\nFailed: {e}", file=sys.stderr)
         sys.exit(1)

@@ -23,6 +23,8 @@ class FirmwareInfo:
     crc32: int
     version: Optional[str] = None
     model: Optional[str] = None
+    dqt_crc: Optional[int] = None       # read back from charger after flash
+    expected_dqt_crc: Optional[int] = None  # from crc_s.txt overallCRC
 
 
 class FirmwareLoader:
@@ -71,14 +73,17 @@ class FirmwareLoader:
         version = self._extract_version()
         model = self._extract_model()
         
+        expected_dqt_crc = self._load_crc_file(file_path)
+
         self._firmware_info = FirmwareInfo(
             file_path=file_path,
             file_size=file_size,
             crc32=crc32,
             version=version,
-            model=model
+            model=model,
+            expected_dqt_crc=expected_dqt_crc
         )
-        
+
         return self._firmware_info
     
     def _calculate_crc32(self, data: bytes) -> int:
@@ -142,6 +147,18 @@ class FirmwareLoader:
         
         return None
     
+    def _load_crc_file(self, firmware_path: str) -> Optional[int]:
+        """Parse overallCRC from crc_s.txt in the same directory as the firmware."""
+        crc_path = os.path.join(os.path.dirname(os.path.abspath(firmware_path)), 'crc_s.txt')
+        if not os.path.exists(crc_path):
+            return None
+        with open(crc_path, 'r') as f:
+            for line in f:
+                if line.startswith('overallCRC('):
+                    value = line.strip()[len('overallCRC('):-1]
+                    return int(value, 16)
+        return None
+
     @property
     def data(self) -> bytes:
         """Get raw firmware data."""

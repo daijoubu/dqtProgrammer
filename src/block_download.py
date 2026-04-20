@@ -181,7 +181,7 @@ class SDOBlockDownload:
                         'wb',
                         size=len(firmware_data),
                         block_transfer=True,
-                        request_crc_support=False
+                        request_crc_support=True
                     ) as fp:
                         offset = 0
                         while offset < len(firmware_data):
@@ -200,6 +200,19 @@ class SDOBlockDownload:
                     self.node.sdo.PAUSE_BEFORE_SEND = 0.0
                 
                 self._state = BlockDownloadState.COMPLETED
+
+                if not self._wait_for_restart():
+                    raise BlockDownloadError("Charger did not return to network after reboot")
+                self._firmware_info.dqt_crc = self._read_dqt_crc()
+                expected = self._firmware_info.expected_dqt_crc
+                if expected is not None:
+                    if self._firmware_info.dqt_crc != expected:
+                        raise BlockDownloadError(
+                            f"DQT CRC mismatch: charger=0x{self._firmware_info.dqt_crc:04X} "
+                            f"expected=0x{expected:04X}"
+                        )
+                    print(f"DQT CRC OK — charger=0x{self._firmware_info.dqt_crc:04X}, expected=0x{expected:04X}")
+
                 return self._firmware_info
                 
             except BlockDownloadError as e:
@@ -223,6 +236,25 @@ class SDOBlockDownload:
             f"Firmware download failed after {max_retries} attempts: {last_error}"
         )
     
+    def _wait_for_restart(self, timeout: float = 30.0) -> bool:
+        """Poll 0x1F56:01 until charger responds after reboot."""
+        print("\nWaiting for charger to restart...", flush=True)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                self.node.sdo.upload(self.OBJ_PROGRAM_CRC, self.SUB_PROGRAM_DATA)
+                return True
+            except (canopen.SdoCommunicationError, canopen.SdoAbortedError):
+                time.sleep(1.0)
+        return False
+
+    def _read_dqt_crc(self) -> int:
+        try:
+            data = self.node.sdo.upload(self.OBJ_PROGRAM_CRC, self.SUB_PROGRAM_DATA)
+            return int.from_bytes(data[:4], 'little')
+        except (canopen.SdoAbortedError, canopen.SdoCommunicationError) as e:
+            raise BlockDownloadError(f"DQT CRC read failed: {e}")
+
     def cancel(self) -> bool:
         try:
             self._send_program_control(self.PROGRAM_STOP)

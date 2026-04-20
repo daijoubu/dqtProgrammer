@@ -7,7 +7,7 @@ Uses canopen library's BlockDownloadStream for proper CiA 301 block transfer.
 import can
 import canopen
 import time
-from typing import Optional, Callable, Tuple
+from typing import Optional, Callable
 from enum import IntEnum
 
 from .firmware import FirmwareLoader, FirmwareInfo
@@ -62,8 +62,7 @@ class SDOBlockDownload:
     SUB_FLASH_STATUS = 0x01
     
     BLOCK_SIZE = 0x7F
-    FIRST_BLOCK_DELAY = 15.0
-    SUBSEQUENT_BLOCK_DELAY = 0.5
+    FIRST_BLOCK_DELAY = 60.0
     
     PROGRAM_STOP = 0x00
     PROGRAM_START = 0x01
@@ -136,112 +135,6 @@ class SDOBlockDownload:
             time.sleep(0.5)
         return False
     
-    def _initiate_block_download(
-        self,
-        data_size: int,
-        supports_crc: bool = True
-    ) -> Tuple[int, bool]:
-        """Initiate SDO block download per CiA 301."""
-        try:
-            response = self.node.sdo.upload(self.OBJ_PROGRAM_DATA, self.SUB_PROGRAM_DATA)
-            
-            if len(response) >= 5:
-                server_block_size = response[4] & 0x7F
-                server_crc_supported = (response[4] & 0x01) != 0
-            else:
-                server_block_size = self.block_size
-                server_crc_supported = False
-            
-            size_data = data_size.to_bytes(4, 'little')
-            self.node.sdo.download(
-                self.OBJ_PROGRAM_DATA,
-                self.SUB_PROGRAM_DATA,
-                size_data
-            )
-            
-            return server_block_size, server_crc_supported
-            
-        except canopen.SdoAbortedError as e:
-            raise BlockDownloadError(f"Block download initiate abort: 0x{e.code:08X}")
-        except canopen.SdoCommunicationError as e:
-            raise BlockDownloadError(f"Block download initiate error: {e}")
-    
-    def _transfer_block_data(self, data: bytes, block_number: int) -> bool:
-        """Transfer a block using canopen's BlockDownloadStream."""
-        try:
-            stream = canopen.sdo.client.BlockDownloadStream(
-                self.node.sdo,
-                self.OBJ_PROGRAM_DATA,
-                self.SUB_PROGRAM_DATA,
-                size=len(data),
-                request_crc_support=True
-            )
-            
-            stream.write(data)
-            
-            return True
-            
-        except canopen.SdoAbortedError as e:
-            raise BlockDownloadError(f"Block data transfer abort: 0x{e.code:08X}")
-        except canopen.SdoCommunicationError as e:
-            raise BlockDownloadError(f"Block data transfer error: {e}")
-        except Exception as e:
-            raise BlockDownloadError(f"Block data transfer error: {e}")
-    
-    def _send_block_download_end(self, crc: Optional[int] = None) -> bool:
-        """Send SDO Block Download End per CiA 301."""
-        try:
-            request = bytearray(8)
-            
-            if crc is not None:
-                cmd = 0xC1 | 0x10
-                crc_bytes = crc.to_bytes(4, 'little')
-            else:
-                cmd = 0xC1
-                crc_bytes = bytes(4)
-            
-            request[0] = cmd
-            
-            import struct
-            struct.pack_into("<I", request, 4, crc if crc is not None else 0)
-            
-            response = self.node.sdo.request_response(request)
-            
-            res_cmd = response[0] & 0xE0
-            if res_cmd == 0xA0:
-                return True
-            elif res_cmd == 0x80:
-                abort_code = int.from_bytes(response[4:8], 'little')
-                raise BlockDownloadError(f"Block download end abort: 0x{abort_code:08X}")
-            else:
-                raise BlockDownloadError(f"Unexpected block download end response: 0x{response[0]:02X}")
-                
-        except canopen.SdoAbortedError as e:
-            raise BlockDownloadError(f"Block download end abort: 0x{e.code:08X}")
-        except canopen.SdoCommunicationError as e:
-            raise BlockDownloadError(f"Block download end error: {e}")
-    
-    def _complete_block_download(self, crc: int) -> bool:
-        """Complete block download with Block Download End message."""
-        try:
-            self._send_block_download_end(crc)
-            
-            time.sleep(1.0)
-            
-            status = self.node.sdo.upload(self.OBJ_FLASH_STATUS, self.SUB_FLASH_STATUS)
-            
-            if len(status) >= 4:
-                status_value = int.from_bytes(status[:4], 'little')
-                if status_value & 0x01:
-                    pass
-            
-            return True
-            
-        except canopen.SdoAbortedError as e:
-            raise BlockDownloadError(f"Block download complete abort: 0x{e.code:08X}")
-        except canopen.SdoCommunicationError as e:
-            raise BlockDownloadError(f"Block download complete error: {e}")
-    
     def download_firmware(
         self,
         firmware_loader: FirmwareLoader,
@@ -270,42 +163,55 @@ class SDOBlockDownload:
                     raise BlockDownloadError("Charger did not stop within timeout")
                 
                 self._send_program_control(self.PROGRAM_CLEAR)
-                time.sleep(1.0)
-                
-                server_block_size, server_crc_supported = self._initiate_block_download(
-                    len(firmware_data),
-                    supports_crc=True
-                )
-                
-                actual_block_size = min(self.block_size, server_block_size * 7)
-                
+
                 self._state = BlockDownloadState.TRANSFERRING
-                
-                for block_num in range(self._total_blocks):
-                    offset = block_num * actual_block_size
-                    block_data = firmware_data[offset:offset + actual_block_size]
-                    
-                    while len(block_data) % 4 != 0:
-                        block_data += b'\x00'
-                    
-                    self._transfer_block_data(block_data, block_num)
-                    
-                    self._current_block = block_num + 1
-                    self._bytes_transferred = min(
-                        (block_num + 1) * actual_block_size,
-                        len(firmware_data)
-                    )
-                    self._update_progress()
-                    
-                    delay = self.FIRST_BLOCK_DELAY if block_num == 0 else self.SUBSEQUENT_BLOCK_DELAY
-                    time.sleep(delay)
-                
-                self._complete_block_download(self._firmware_info.crc32)
+
+                # Flash erase on first block can take many seconds; boost timeout
+                # for entire block transfer so we don't abort prematurely.
+                # Throttle inter-frame gap: charger buffers ~22 segments (~154 bytes)
+                # at 125 kbps; blasting 127 frames back-to-back overruns it.
+                self.node.sdo.RESPONSE_TIMEOUT = self.FIRST_BLOCK_DELAY
+                self.node.sdo.PAUSE_BEFORE_SEND = 0.005  # 5ms between frames
+                chunk_size = self.block_size * 7  # one sub-block = 889 bytes
+                _block_start = time.time()
+                try:
+                    with self.node.sdo.open(
+                        self.OBJ_PROGRAM_DATA,
+                        self.SUB_PROGRAM_DATA,
+                        'wb',
+                        size=len(firmware_data),
+                        block_transfer=True,
+                        request_crc_support=False
+                    ) as fp:
+                        offset = 0
+                        while offset < len(firmware_data):
+                            chunk = firmware_data[offset:offset + chunk_size]
+                            fp.write(chunk)
+                            offset += len(chunk)
+                            self._bytes_transferred = offset
+                            self._current_block = offset // chunk_size
+                            self._update_progress()
+                except canopen.SdoCommunicationError as e:
+                    elapsed = time.time() - _block_start
+                    print(f"[DEBUG] Block transfer timed out after {elapsed:.1f}s waiting for ACK")
+                    raise
+                finally:
+                    self.node.sdo.RESPONSE_TIMEOUT = self.timeout
+                    self.node.sdo.PAUSE_BEFORE_SEND = 0.0
                 
                 self._state = BlockDownloadState.COMPLETED
                 return self._firmware_info
                 
             except BlockDownloadError as e:
+                print(f"[DEBUG] BlockDownloadError: {e}")
+                last_error = e
+                self._state = BlockDownloadState.FAILED
+                
+                if attempt < max_retries:
+                    time.sleep(2.0)
+                continue
+            except Exception as e:
+                print(f"[DEBUG] Unexpected error: {type(e).__name__}: {e}")
                 last_error = e
                 self._state = BlockDownloadState.FAILED
                 
@@ -330,13 +236,14 @@ def download_firmware(
     bus: can.Bus,
     node_id: int,
     firmware_path: str,
-    customer_secret: int,
+    customer_secret: Optional[int] = None,
     progress_callback: Optional[Callable[[BlockDownloadProgress], None]] = None,
     timeout: float = 2.0
 ) -> FirmwareInfo:
-    from .auth import authenticate_charger
-    
-    authenticate_charger(bus, node_id, customer_secret, timeout)
+    # Authentication is optional - Delta-Q allows reprogramming without it
+    if customer_secret is not None:
+        from .auth import authenticate_charger
+        authenticate_charger(bus, node_id, customer_secret, timeout)
     
     loader = FirmwareLoader()
     loader.load(firmware_path)

@@ -141,14 +141,23 @@ def authenticate_charger(
         AuthenticationError: If authentication fails after all retries
     """
     for attempt in range(1, max_retries + 1):
+        auth = SDOAuthentication(bus, node_id, customer_secret, timeout)
         try:
-            auth = SDOAuthentication(bus, node_id, customer_secret, timeout)
-            return auth.authenticate()
+            result = auth.authenticate()
+            return result
         except AuthenticationError as e:
             if attempt >= max_retries:
                 raise AuthenticationError(
                     f"Authentication failed after {max_retries} attempts: {e}"
                 )
             time.sleep(0.5)
-    
+        finally:
+            # Stop the Notifier without shutting down the caller's bus.
+            # python-can 4.4+ raises ValueError if the same bus is registered
+            # with two active Notifiers, which happens when block_download creates
+            # its own canopen.Network immediately after authentication.
+            if auth.network.notifier is not None:
+                auth.network.notifier.stop(0.5)
+                auth.network.notifier = None
+
     return False

@@ -6,11 +6,36 @@ Uses canopen library's BlockDownloadStream for proper CiA 301 block transfer.
 
 import can
 import canopen
+import contextlib
+import sys
 import time
 from typing import Optional, Callable
 from enum import IntEnum
 
 from .firmware import FirmwareLoader, FirmwareInfo
+
+
+@contextlib.contextmanager
+def _high_res_timer():
+    """Request 1 ms timer resolution on Windows for the block transfer.
+
+    Python < 3.11 on Windows uses the default 15.6 ms timer quantum, which
+    clamps time.sleep(0.0015) to ~15 ms and turns a 2-minute flash into 13+.
+    Python 3.11+ calls timeBeginPeriod(1) automatically inside time.sleep(),
+    so this is a no-op there, but it doesn't hurt.
+    """
+    if sys.platform != 'win32':
+        yield
+        return
+    try:
+        import ctypes
+        ctypes.windll.winmm.timeBeginPeriod(1)
+        try:
+            yield
+        finally:
+            ctypes.windll.winmm.timeEndPeriod(1)
+    except Exception:
+        yield
 
 
 class BlockDownloadError(Exception):
@@ -96,8 +121,8 @@ class SDOBlockDownload:
         # but does not create the Notifier; connect() skips bus creation when
         # self.bus is already set and only creates the Notifier.
         self.network = canopen.Network(bus)
+        self.network.listeners.append(_BusErrorSuppressor())  # must be before connect()
         self.network.connect()
-        self.network.listeners.append(_BusErrorSuppressor())
         self.node = canopen.RemoteNode(node_id, None)
         self.network.add_node(self.node)
         
@@ -187,7 +212,7 @@ class SDOBlockDownload:
                 self.node.sdo.PAUSE_BEFORE_SEND = 0.0015  # 1.5ms floor; 0ms fails, 1ms risky (scheduler jitter)
                 _block_start = time.time()
                 try:
-                    with self.node.sdo.open(
+                    with _high_res_timer(), self.node.sdo.open(
                         self.OBJ_PROGRAM_DATA,
                         self.SUB_PROGRAM_DATA,
                         'wb',

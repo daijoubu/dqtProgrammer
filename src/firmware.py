@@ -152,7 +152,7 @@ class FirmwareLoader:
         crc_path = os.path.join(os.path.dirname(os.path.abspath(firmware_path)), 'crc_s.txt')
         if not os.path.exists(crc_path):
             return None
-        with open(crc_path, 'r') as f:
+        with open(crc_path, 'r', encoding='utf-8') as f:
             for line in f:
                 if line.startswith('overallCRC('):
                     value = line.strip()[len('overallCRC('):-1]

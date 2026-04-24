@@ -17,19 +17,26 @@ def progress(p: BlockDownloadProgress):
 def main():
     parser = argparse.ArgumentParser(description="Flash firmware to Delta-Q charger")
     parser.add_argument("firmware", help="Path to firmware binary (e.g. CO_Config.bin)")
-    parser.add_argument("--interface", default="can0", help="SocketCAN interface (default: can0)")
+    parser.add_argument("--channel", default="can0", help="CAN channel (default: can0; e.g. PCAN_USBBUS1 for PCAN)")
+    parser.add_argument("--interface-type", default=None, help="python-can backend: socketcan, pcan, kvaser, virtual, … Reads ~/.canrc or CAN_INTERFACE env var if omitted.")
+    parser.add_argument("--bitrate", type=int, default=None, help="CAN bus bitrate in bps (e.g. 125000). Passed through to the interface driver.")
     parser.add_argument("--node-id", type=lambda x: int(x, 0), default=0x0A, help="CANopen node ID (default: 0x0A)")
     parser.add_argument("--timeout", type=float, default=5.0, help="SDO response timeout in seconds (default: 5.0)")
     parser.add_argument("--secret", type=lambda x: int(x, 0), default=None, help="Customer secret for auth (optional)")
     args = parser.parse_args()
 
-    print(f"Interface : {args.interface}")
+    print(f"Channel   : {args.channel}")
+    print(f"Interface : {args.interface_type or '(from config)'}")
+    print(f"Bitrate   : {args.bitrate or '(from config)'}")
     print(f"Node ID   : 0x{args.node_id:02X}")
     print(f"Firmware  : {args.firmware}")
     print(f"Timeout   : {args.timeout}s")
     print()
 
-    bus = can.Bus(interface="socketcan", channel=args.interface)
+    bus_kwargs = {}
+    if args.bitrate is not None:
+        bus_kwargs['bitrate'] = args.bitrate
+    bus = can.Bus(channel=args.channel, interface=args.interface_type, **bus_kwargs)
     try:
         info = download_firmware(
             bus=bus,

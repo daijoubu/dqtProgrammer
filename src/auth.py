@@ -32,9 +32,12 @@ class SDOAuthentication:
         self.customer_secret = customer_secret & 0xFFFF
         self.timeout = timeout
         
-        # Create canopen network and node
-        self.network = canopen.Network()
-        self.network.connect(interface='socketcan', channel=bus.channel)
+        # Use the caller's bus — works with any python-can backend.
+        # connect() is called separately because Network(bus) sets self.bus
+        # but does not create the Notifier; connect() skips bus creation when
+        # self.bus is already set and only creates the Notifier.
+        self.network = canopen.Network(bus)
+        self.network.connect()
         self.node = canopen.RemoteNode(node_id, None)
         self.network.add_node(self.node)
         

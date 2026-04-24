@@ -18,6 +18,14 @@ class BlockDownloadError(Exception):
     pass
 
 
+class _BusErrorSuppressor(can.Listener):
+    """Silences Notifier thread exceptions (e.g. bus drop during charger reboot)."""
+    def on_message_received(self, msg: can.Message) -> None:
+        pass
+    def on_error(self, exc: Exception) -> None:
+        pass
+
+
 class BlockDownloadState(IntEnum):
     """Block download states."""
     IDLE = 0
@@ -83,8 +91,13 @@ class SDOBlockDownload:
         self.timeout = timeout
         self.progress_callback = progress_callback
         
-        self.network = canopen.Network()
-        self.network.connect(interface='socketcan', channel=bus.channel)
+        # Use the caller's bus — works with any python-can backend.
+        # connect() is called separately because Network(bus) sets self.bus
+        # but does not create the Notifier; connect() skips bus creation when
+        # self.bus is already set and only creates the Notifier.
+        self.network = canopen.Network(bus)
+        self.network.connect()
+        self.network.listeners.append(_BusErrorSuppressor())
         self.node = canopen.RemoteNode(node_id, None)
         self.network.add_node(self.node)
         
@@ -171,8 +184,7 @@ class SDOBlockDownload:
                 # Throttle inter-frame gap: charger buffers ~22 segments (~154 bytes)
                 # at 125 kbps; blasting 127 frames back-to-back overruns it.
                 self.node.sdo.RESPONSE_TIMEOUT = self.FIRST_BLOCK_DELAY
-                self.node.sdo.PAUSE_BEFORE_SEND = 0.005  # 5ms between frames
-                chunk_size = self.block_size * 7  # one sub-block = 889 bytes
+                self.node.sdo.PAUSE_BEFORE_SEND = 0.0015  # 1.5ms floor; 0ms fails, 1ms risky (scheduler jitter)
                 _block_start = time.time()
                 try:
                     with self.node.sdo.open(
@@ -183,6 +195,10 @@ class SDOBlockDownload:
                         block_transfer=True,
                         request_crc_support=True
                     ) as fp:
+                        # Use the block size the charger negotiated, not our requested value.
+                        # fp is a BufferedWriter; the raw BlockDownloadStream is fp.raw.
+                        chunk_size = fp.raw._blksize * 7
+                        self._total_blocks = (len(firmware_data) + chunk_size - 1) // chunk_size
                         offset = 0
                         while offset < len(firmware_data):
                             chunk = firmware_data[offset:offset + chunk_size]

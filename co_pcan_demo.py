@@ -39,11 +39,20 @@ def _parse_args() -> argparse.Namespace:
                         help="Target charger CANopen node ID")
     parser.add_argument("-tout",   type=float, metavar="seconds",
                         help="Timeout in seconds (required for all modes except 3)")
+    parser.add_argument("-charger_COBId",    type=int, metavar="cobId",
+                        help="COB-ID for charger SDO requests")
+    parser.add_argument("-programmer_COBId", type=int, metavar="cobId",
+                        help="COB-ID for programmer SDO responses")
+
 
     # ── Mode 0: firmware flash ────────────────────────────────────────────────
     parser.add_argument("-f", metavar="filePath",
                         help="[Mode 0] Path to firmware binary package")
-
+    parser.add_argument("-noAuth", action=argparse.BooleanOptionalAction,
+                        help="[Mode 0] no authentication")
+    parser.add_argument("-skipUnhideParam", action=argparse.BooleanOptionalAction,
+                        help="[Mode 0] Skip Unhide Parameters")
+    
     # ── Mode 1: SDO read ──────────────────────────────────────────────────────
     parser.add_argument("-rdIdx",    metavar="index",
                         help="[Mode 1] SDO index (decimal or hex, e.g. 8022 or x1f56)")
@@ -65,10 +74,6 @@ def _parse_args() -> argparse.Namespace:
                         help="[Mode 3] Serial port number")
     parser.add_argument("-myNodeId",         type=int, metavar="myId",
                         help="[Mode 3] Local node ID")
-    parser.add_argument("-charger_COBId",    type=int, metavar="cobId",
-                        help="[Mode 3] COB-ID for charger SDO requests")
-    parser.add_argument("-programmer_COBId", type=int, metavar="cobId",
-                        help="[Mode 3] COB-ID for programmer SDO responses")
 
     # ── Modes 4 / 5: NVS ─────────────────────────────────────────────────────
     parser.add_argument("-dsId",    type=int, metavar="datasetId",

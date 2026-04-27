@@ -60,6 +60,8 @@ def _parse_args() -> argparse.Namespace:
                         help="[Mode 1] SDO sub-index")
     parser.add_argument("-fout",     metavar="filePath",
                         help="[Mode 1] Optional output file for read value")
+    parser.add_argument("-rdSize", type=int,
+                        help="[Mode 1] Size of value to read in bytes")
 
     # ── Mode 2: SDO write ─────────────────────────────────────────────────────
     parser.add_argument("-wrIdx",    metavar="index",

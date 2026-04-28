@@ -5,6 +5,7 @@ import argparse
 import sys
 import can
 import canopen
+import time
 
 from src.block_download import download_firmware, BlockDownloadProgress
 from src.sdo import parse_sdo_index, sdo_read, sdo_write
@@ -82,7 +83,11 @@ def _parse_args() -> argparse.Namespace:
                         help="[Mode 4/5] Dataset ID")
     parser.add_argument("-dsInpVal", metavar="value",
                         help="[Mode 5] Value to write")
-
+    
+    # ── Mode 13: Node discovery ──────────────────────────────────────────────
+    parser.add_argument("-nodeIdArray",
+                        help="[Mode 13] Array of node Ids to check")
+    
     # ── Channel override — optional extension, not in original spec.
     #    Interface type is always resolved from ~/.canrc or CAN_INTERFACE env var.
     parser.add_argument("-iface", metavar="channel",
@@ -202,6 +207,20 @@ def _handle_mode_2(args: argparse.Namespace) -> None:
     finally:
         network.disconnect()
 
+def _handle_mode_13(args: argparse.Namespace) -> None:
+    _require(args, "-nodeIdArray", mode_label="13 (Node Discovery)")
+
+    network = _connect_network(args)
+    try:
+        network.scanner.search()
+        # We may need to wait a short while here to allow all nodes to respond
+        time.sleep(0.05)
+        for node_id in network.scanner.nodes:
+            print(f"Found node {node_id}!")
+        
+    finally:
+        network.disconnect()
+
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
@@ -212,6 +231,8 @@ def _dispatch(args: argparse.Namespace) -> None:
         _handle_mode_1(args)
     elif args.mode == 2:
         _handle_mode_2(args)
+    elif args.mode == 13:
+        _handle_mode_13(args)
     elif args.mode in _IN_PROGRESS:
         print(f"Mode {args.mode} ({_IN_PROGRESS[args.mode]}) is not yet implemented "
               f"— work in progress.", file=sys.stderr)

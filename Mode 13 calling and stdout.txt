@@ -1,0 +1,44 @@
+C:\CAN Reprogramming v2.3.3 RC2>CO_PCAN_DEMO.exe -mode 13 -br 125 -tout 10 -nodeIdArray 1,2,3,4,5,6,7,8,9,10 -channel 1
+
+
+CO_PCAN_DEMO> CO_PCAN_DLL     v1.5.0.0
+CO_PCAN_DEMO> CO_PCAN_DEMO    v3.1.0.2
+CO_PCAN_DEMO> NodeId: 10 Silence successful.
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+Timeout
+CO_PCAN_DEMO> NodeId: 1 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 9 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 6 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 7 Failed to Silence!
+Timeout
+Timeout
+Timeout
+Timeout
+CO_PCAN_DEMO> NodeId: 5 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 4 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 3 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 2 Failed to Silence!
+CO_PCAN_DEMO> NodeId: 8 Failed to Silence!
+
+CO_PCAN_DEMO> Program End -- Task Success

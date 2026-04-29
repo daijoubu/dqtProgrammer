@@ -36,7 +36,7 @@ def _parse_args() -> argparse.Namespace:
                         help="Operational mode")
     parser.add_argument("-br",     type=int,   required=True, metavar="baudRate",
                         help="CAN baud rate in kbps (e.g. 125, 250, 500, 1000)")
-    parser.add_argument("-nodeId", type=int,   required=True, metavar="chargerNodeId",
+    parser.add_argument("-nodeId", type=int, metavar="chargerNodeId",
                         help="Target charger CANopen node ID")
     parser.add_argument("-tout",   type=float, metavar="seconds",
                         help="Timeout in seconds (required for all modes except 3)")
@@ -209,14 +209,21 @@ def _handle_mode_2(args: argparse.Namespace) -> None:
 
 def _handle_mode_13(args: argparse.Namespace) -> None:
     _require(args, "-nodeIdArray", mode_label="13 (Node Discovery)")
+    
+    nodeArray = args.nodeIdArray.split(',')
 
     network = _connect_network(args)
+    
     try:
-        network.scanner.search()
+        # network.scanner.search()  hits all nodes and looks for device type but mode 13 should set heartbeat time to 0.
+        """Search for nodes by sending SDO requests to all node IDs."""
+        sdo_req = b"\x2B\x17\x10\x00\x00\x00\x00\x00" # set 0x1017 heartbeat interval to 0.
+        for node_id in nodeArray:
+            network.send_message(0x600 + int(node_id), sdo_req)
         # We may need to wait a short while here to allow all nodes to respond
         time.sleep(0.05)
         for node_id in network.scanner.nodes:
-            print(f"Found node {node_id}!")
+            print(f"NodeId: {node_id} Silence successful.")
         
     finally:
         network.disconnect()
